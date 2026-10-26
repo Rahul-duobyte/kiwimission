@@ -91,6 +91,29 @@ footer a{text-decoration:none}
 .vbody img.single{max-width:100%;border-radius:8px;margin:auto 0}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Tri-fold book viewer */
+.book-wrap{flex:1;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:0}
+.modes{display:inline-flex;padding:4px;border-radius:999px;background:rgba(243,241,228,.08);border:1px solid var(--line)}
+.modes button{padding:8px 16px;border-radius:999px;font-size:13.5px;font-weight:700;color:var(--muted)}
+.modes button.on{background:var(--lime);color:#12301c}
+.stage{position:relative;display:flex;justify-content:center;align-items:center;width:100%}
+.flipbook{margin:0 auto}
+.flipbook .page{background:#f3f6ee;overflow:hidden}
+.flipbook .page img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;user-select:none}
+.bnav{display:flex;align-items:center;gap:14px;position:relative;z-index:5}
+.modes{position:relative;z-index:5}
+.bnav button{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:rgba(166,209,74,.14);color:var(--lime)}
+.bnav button:disabled{opacity:.3}
+.bnav button svg{width:20px;height:20px}
+.bcount{min-width:120px;text-align:center;font-size:13.5px;color:var(--muted)}
+.bcount b{color:var(--cream)}
+.bhint{font-size:12.5px;color:var(--muted);opacity:.85}
+.sheets{width:100%;max-width:1100px;display:flex;flex-direction:column;gap:16px}
+.sheets figure{margin:0}
+.sheets figcaption{font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--lime);margin:0 4px 8px}
+.sheets img{width:100%;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);background:#fff}
+.vbody.book{padding:12px 10px 18px;justify-content:center}
 </style>
 </head>
 <body>
@@ -153,15 +176,17 @@ footer a{text-decoration:none}
   <div class="vbody" id="vBody"></div>
 </section>
 
+<script src="page-flip.js"></script>
 <script>
 /* ---- Edit this list to add or update resources ----
    kind: "pages" (PDF shown as page images), "image" (flyer), "video"
    Set available:true and fill file/src once the file is uploaded. */
 var RESOURCES = [
-  { id:'brochure', kind:'pages', label:'Brochure', title:'Kiwi Brochure',
-    desc:'The complete kiwi brief with the field-level Package of Practices — climate, varieties, planting and orchard care.',
-    meta:'PDF · 11 pages', pages:11, pagePath:'brochure-p-', file:'Arunachal-Kiwi-Brochure.pdf',
-    downloadName:'Kiwi-Brochure.pdf', available:true },
+  { id:'brochure', kind:'book', label:'Brochure', title:'Arunachal Kiwi Brochure',
+    desc:'Tri-fold brochure: why Arunachal Kiwi stands apart, kiwi geography, orchard-to-market value chain and the 2047 vision. Flip through it like a book.',
+    meta:'Tri-fold · 6 panels', pages:['kb-p1.jpg','kb-p2.jpg','kb-p3.jpg','kb-p4.jpg','kb-p5.jpg','kb-p6.jpg'],
+    sheets:[['Outside','kb-sheet-outside.jpg'],['Inside','kb-sheet-inside.jpg']],
+    file:'Arunachal-Kiwi-Brochure.pdf', downloadName:'Arunachal-Kiwi-Brochure.pdf', available:true },
   { id:'flyer', kind:'image', label:'Flyer', title:'Kiwi Flyer',
     desc:'A one-page snapshot of Kiwi Mission, easy to read and share.',
     meta:'Image · 1 page', src:'', file:'', downloadName:'Kiwi-Flyer.jpg', available:false },
@@ -173,9 +198,11 @@ var RESOURCES = [
 var ICONS = {
   image:'<svg viewBox="0 0 48 48" fill="none" stroke="#a6d14a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="6" width="32" height="36" rx="4"/><circle cx="18" cy="17" r="3.5"/><path d="M8 34l10-9 8 7 5-4 9 8"/></svg>',
   video:'<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="17" fill="none" stroke="#a6d14a" stroke-width="2.4"/><path d="M20 16.5v15l12-7.5z" fill="#a6d14a"/></svg>',
+  book:'<svg viewBox="0 0 48 48" fill="none" stroke="#a6d14a" stroke-width="2.4" stroke-linejoin="round"><path d="M6 10l12-3v31l-12 3zM18 7l12 3v31l-12-3zM30 10l12-3v31l-12 3z"/></svg>',
   pages:'<svg viewBox="0 0 48 48" fill="none" stroke="#a6d14a" stroke-width="2.4" stroke-linecap="round"><path d="M12 6h17l9 9v27H12z"/><path d="M29 6v9h9M18 24h14M18 30h14M18 36h9"/></svg>'
 };
 function thumbHTML(r){
+  if(r.kind==='book' && r.available) return '<img src="'+r.pages[0]+'" alt="" loading="lazy">';
   if(r.kind==='pages' && r.available) return '<img src="'+r.pagePath+'01.jpg" alt="" loading="lazy">';
   if(r.kind==='image' && r.available && r.src) return '<img src="'+r.src+'" alt="" loading="lazy">';
   if(r.kind==='video' && r.available && r.poster) return '<img src="'+r.poster+'" alt="" loading="lazy">';
@@ -218,7 +245,9 @@ function openViewer(){
   var body=$('vBody'); body.innerHTML='';
   $('vTitle').textContent=r.title; $('vMeta').textContent=r.meta;
   $('vDl').href=r.file; $('vDl').setAttribute('download',r.downloadName);
-  if(r.kind==='pages'){
+  body.classList.toggle('book', r.kind==='book');
+  if(r.kind==='book'){ buildBook(r, body); }
+  else if(r.kind==='pages'){
     for(var i=1;i<=r.pages;i++){
       var img=document.createElement('img'); img.className='page'; img.loading=i>2?'lazy':'eager';
       img.alt=r.title+' page '+i; img.src=r.pagePath+String(i).padStart(2,'0')+'.jpg'; body.appendChild(img);
@@ -235,7 +264,73 @@ function openViewer(){
 }
 function closeViewer(){
   var v=$('vBody').querySelector('video'); if(v) v.pause();
+  destroyBook();
   $('viewer').classList.remove('on'); document.body.classList.remove('lock');
+}
+
+/* ---------- Tri-fold brochure as a flip book ---------- */
+var book=null, bookRes=null, bookMode='book', resizeT=null;
+var PAGE_W=808, PAGE_H=1664;
+function destroyBook(){ if(book){ try{book.destroy();}catch(e){} book=null; } window.removeEventListener('resize',onBookResize); }
+function buildBook(r, body){
+  bookRes=r; bookMode='book';
+  body.innerHTML='<div class="book-wrap">'+
+    '<div class="modes" role="tablist"><button class="on" data-m="book">Book</button><button data-m="sheet">Full sheet</button></div>'+
+    '<div class="stage" id="stage"></div>'+
+    '<div class="bnav" id="bnav"><button id="bPrev" aria-label="Previous page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>'+
+    '<div class="bcount" id="bCount"></div>'+
+    '<button id="bNext" aria-label="Next page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button></div>'+
+    '<div class="bhint" id="bHint">Swipe or tap the page corner to turn</div></div>';
+  body.querySelectorAll('.modes button').forEach(function(b){
+    b.addEventListener('click',function(){ body.querySelectorAll('.modes button').forEach(function(x){x.classList.toggle('on',x===b)}); bookMode=b.dataset.m; renderBookMode(); });
+  });
+  $('bPrev').addEventListener('click',function(){ book&&book.flipPrev(); });
+  $('bNext').addEventListener('click',function(){ book&&book.flipNext(); });
+  window.addEventListener('resize',onBookResize);
+  requestAnimationFrame(renderBookMode);
+}
+function onBookResize(){ clearTimeout(resizeT); resizeT=setTimeout(function(){ if(bookMode==='book') renderBookMode(); },200); }
+function renderBookMode(){
+  var stage=$('stage'); if(!stage) return;
+  var startAt = book ? book.getCurrentPageIndex() : 0;
+  destroyBook(); window.addEventListener('resize',onBookResize);
+  stage.innerHTML='';
+  var showNav = bookMode==='book';
+  $('bnav').hidden=!showNav; $('bHint').hidden=!showNav;
+  if(bookMode==='sheet'){
+    var wrap=document.createElement('div'); wrap.className='sheets';
+    bookRes.sheets.forEach(function(sh){ wrap.insertAdjacentHTML('beforeend','<figure><figcaption>'+sh[0]+'</figcaption><img src="'+sh[1]+'" alt="'+bookRes.title+' – '+sh[0]+'"></figure>'); });
+    stage.appendChild(wrap); stage.style.height='auto'; $('vBody').style.justifyContent='flex-start'; document.querySelector('.book-wrap').style.justifyContent='flex-start'; $('vBody').scrollTop=0; return;
+  }
+  $('vBody').style.justifyContent=''; document.querySelector('.book-wrap').style.justifyContent='';
+  // fit the book into the space available
+  var vb=$('vBody'), availW=vb.clientWidth-20, availH=vb.clientHeight-150;
+  var twoUp = availW > 700 && availW/availH > 0.95;
+  var pw = Math.floor(Math.min(twoUp ? availW/2 : availW, availH*PAGE_W/PAGE_H));
+  var ph = Math.floor(pw*PAGE_H/PAGE_W);
+  stage.style.height=ph+'px';
+  var el=document.createElement('div'); el.className='flipbook'; stage.appendChild(el);
+  bookRes.pages.forEach(function(src,i){
+    var pg=document.createElement('div'); pg.className='page';
+    if(i===0||i===bookRes.pages.length-1) pg.setAttribute('data-density','hard');
+    pg.innerHTML='<img src="'+src+'" alt="'+bookRes.title+' panel '+(i+1)+'" draggable="false">';
+    el.appendChild(pg);
+  });
+  book=new St.PageFlip(el,{ width:pw, height:ph, size:'fixed', showCover:true, usePortrait:!twoUp,
+    drawShadow:true, maxShadowOpacity:0.45, flippingTime:750, mobileScrollSupport:false, showPageCorners:true, startPage:startAt });
+  book.loadFromHTML(el.querySelectorAll('.page'));
+  book.on('flip',updateCount); book.on('changeOrientation',updateCount);
+  updateCount();
+}
+function updateCount(){
+  if(!book) return;
+  var i=book.getCurrentPageIndex(), n=book.getPageCount(), label;
+  var names=['Cover','The Highland Edge','Kiwi Geography','Orchard to Market','Vision to Delivery','Back cover'];
+  if(book.getOrientation && book.getOrientation()==='landscape' && i>0 && i<n-1){
+    var a=i%2?i:i-1; label='<b>'+(a+1)+'–'+(a+2)+'</b> of '+n;
+  } else label='<b>'+(i+1)+'</b> of '+n+' · '+names[i];
+  $('bCount').innerHTML=label;
+  $('bPrev').disabled = i===0; $('bNext').disabled = i>=n-1;
 }
 
 $('viewBtn').addEventListener('click',openViewer);
