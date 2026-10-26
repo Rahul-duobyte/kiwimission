@@ -133,17 +133,14 @@ footer a{text-decoration:none}
 .pbook{position:relative;perspective:2200px;perspective-origin:0% 50%;opacity:0;transform:scale(.97);transition:opacity .45s ease,transform .45s ease}
 .pbook.ready{opacity:1;transform:none}
 .pbook .base{position:absolute;inset:0;border-radius:2px;box-shadow:0 18px 34px rgba(0,0,0,.5)}
-.leaf{position:absolute;inset:0;transform-origin:0 50%;transform-style:preserve-3d;will-change:transform}
-.leaf.anim{transition:transform .62s cubic-bezier(.25,.7,.25,1)}
-.leaf .face,.leaf .back{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden;background:#f3f6ee}
-.leaf .face img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;-webkit-user-drag:none}
-.leaf .face::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7%;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent);pointer-events:none;z-index:1}
-.leaf .back{transform:rotateY(180deg);background:linear-gradient(90deg,#dfe5d6,#f1f4ea 30%,#e8ede0)}
-.leaf .shade,.leaf .bshade,.leaf .cast{position:absolute;inset:0;pointer-events:none;opacity:0}
-.leaf .shade{background:linear-gradient(270deg,rgba(0,0,0,.45),rgba(0,0,0,.08) 55%,rgba(255,255,255,.08));z-index:2}
-.leaf .bshade{background:linear-gradient(90deg,rgba(0,0,0,.35),transparent 70%)}
-.leaf .cast{background:linear-gradient(90deg,rgba(0,0,0,.42),rgba(0,0,0,.12) 45%,transparent 80%);z-index:2}
-.leaf.anim .shade,.leaf.anim .bshade,.leaf.anim .cast{transition:opacity .62s cubic-bezier(.25,.7,.25,1)}
+.leaf{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:0 50%;transform-style:preserve-3d;will-change:transform}
+.strip{position:absolute;top:0;height:100%;transform-origin:0 50%;transform-style:preserve-3d}
+.strip>.f,.strip>.b{position:absolute;left:0;top:0;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;background-repeat:no-repeat}
+.strip>.b{transform:rotateY(180deg);background:#eef2e6}
+.strip>.f>i,.strip>.b>i{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+.strip>.f>u,.strip>.b>u{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.leaf .spine{position:absolute;left:0;top:0;bottom:0;width:7%;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent);pointer-events:none;transform:translateZ(.1px)}
+.leaf .cast{position:absolute;inset:0;pointer-events:none;opacity:0;background:linear-gradient(90deg,rgba(0,0,0,.45),rgba(0,0,0,.15) 45%,transparent 85%);transform:translateZ(.2px)}
 .bdots button{width:8px;height:8px;border-radius:50%;background:rgba(243,241,228,.25);padding:0;transition:width .25s,background .25s}
 .bdots button.on{width:22px;border-radius:5px;background:var(--lime)}
 </style>
@@ -373,75 +370,108 @@ function renderBookMode(){
     loader.remove(); requestAnimationFrame(function(){ el.classList.add('ready'); });
   });
 }
-/* ---- PhoneBook: single-page book with a finger-following 3D page turn ---- */
+/* ---- PhoneBook: single-page book; pages bend like paper as they turn ---- */
 function PhoneBook(stage,pages,w,h,start,title){
-  var self=this, n=pages.length, cur=Math.max(0,Math.min(start||0,n-1)), busy=false;
+  var n=pages.length, cur=Math.max(0,Math.min(start||0,n-1)), busy=false, N=16;
   var root=document.createElement('div'); root.className='pbook'; root.style.width=w+'px'; root.style.height=h+'px';
+  root.setAttribute('role','img'); root.setAttribute('aria-label',title);
   root.innerHTML='<div class="base"></div>';
+  var sw=w/N;
+  // weights: paper bends more towards the free edge
+  var wts=[],tot=0; for(var k=1;k<N;k++){ var v=Math.pow(k/(N-1),1.6); wts.push(v); tot+=v; } wts=wts.map(function(v){return v/tot;});
   var leaves=pages.map(function(src,i){
     var l=document.createElement('div'); l.className='leaf';
-    l.innerHTML='<div class="face"><img src="'+src+'" alt="'+title+' panel '+(i+1)+'" draggable="false"><div class="shade"></div><div class="cast"></div></div><div class="back"><div class="bshade"></div></div>';
+    var parent=l, strips=[];
+    for(var k=0;k<N;k++){
+      var st=document.createElement('div'); st.className='strip';
+      st.style.width=(sw+0.6)+'px'; st.style.left = k===0 ? '0px' : sw+'px';
+      st.innerHTML='<div class="f" style="background-image:url('+src+');background-size:'+w+'px '+h+'px;background-position:'+(-k*sw)+'px 0"><i></i><u></u></div><div class="b"><i></i><u></u></div>';
+      parent.appendChild(st); parent=st; strips.push({el:st, fs:st.firstChild.firstChild, fh:st.firstChild.lastChild, bs:st.lastChild.firstChild, bh:st.lastChild.lastChild});
+    }
+    l.insertAdjacentHTML('beforeend','<div class="spine"></div><div class="cast"></div>');
+    l._strips=strips; l._cast=l.querySelector('.cast'); l._hard=(i===0||i===n-1);
     root.appendChild(l); return l;
   });
   stage.appendChild(root); requestAnimationFrame(function(){ root.classList.add('ready'); });
-  function q(l,c){ return l.querySelector(c); }
-  function layer(){ leaves.forEach(function(l,i){ l.classList.remove('anim'); l.style.zIndex = i<cur ? 200+i : 100-i;
-      l.style.transform = i<cur ? 'rotateY(-180deg)' : 'rotateY(0deg)'; q(l,'.shade').style.opacity=0; q(l,'.bshade').style.opacity=0; q(l,'.cast').style.opacity=0;
+
+  // pose: t in [0,1] (0 = flat on the right, 1 = turned over), dir: +1 forward / -1 back
+  function pose(l,t,dir,under){
+    var e=Math.max(0,Math.min(1,t));
+    var curlMax = l._hard ? 30 : 95;
+    var curl = Math.sin(Math.PI*e) * curlMax;            // how much the paper bends
+    var spine = -180*e + (dir>0 ? curl*0.55 : -curl*0.55); // spine part lags behind the edge
+    spine = Math.max(-180, Math.min(0, spine));
+    var C = dir>0 ? -curl : curl;
+    l.style.transform='rotateY('+spine.toFixed(2)+'deg)';
+    var acc=spine, st=l._strips;
+    for(var k=0;k<st.length;k++){
+      var d = k===0 ? 0 : C*wts[k-1];
+      if(k>0) st[k].el.style.transform='rotateY('+d.toFixed(2)+'deg)';
+      acc+=d;
+      var a=Math.abs(acc)*Math.PI/180;              // 0..pi
+      var light=Math.cos(a);                         // 1 facing viewer, -1 facing away
+      var front = a<Math.PI/2;
+      var dark = front ? (1-light)*0.55 : (1+light)*0.45;
+      var gloss = Math.max(0, Math.sin(a*2))*0.10*(k/st.length);
+      st[k].fs.style.opacity = front ? dark.toFixed(3) : 0;
+      st[k].fh.style.opacity = front ? gloss.toFixed(3) : 0;
+      st[k].bs.style.opacity = front ? 0 : dark.toFixed(3);
+      st[k].bh.style.opacity = front ? 0 : gloss.toFixed(3);
+    }
+    if(under) under._cast.style.opacity = (Math.sin(Math.PI*e)*0.85).toFixed(3);
+    l._t=e;
+  }
+  function flat(l){ l.style.transform='rotateY(0deg)'; l._strips.forEach(function(s,k){ if(k>0) s.el.style.transform='rotateY(0deg)'; s.fs.style.opacity=0; s.fh.style.opacity=0; s.bs.style.opacity=0; s.bh.style.opacity=0; }); l._cast.style.opacity=0; l._t=0; }
+  function layer(){ leaves.forEach(function(l,i){ l.style.zIndex = i<cur ? 200+i : 100-i; flat(l);
+      if(i<cur){ l.style.transform='rotateY(-180deg)'; l._t=1; }
       l.style.visibility = (i<cur || i>cur+1) ? 'hidden':'visible'; }); }
-  function paint(l,under,deg){ // deg: 0 (flat, right) .. -180 (turned over)
-    var t=Math.min(1,Math.abs(deg)/180);
-    l.style.transform='rotateY('+deg+'deg)';
-    q(l,'.shade').style.opacity = Math.sin(t*Math.PI)*0.9;
-    q(l,'.bshade').style.opacity = 1-t;
-    if(under) q(under,'.cast').style.opacity = (1-t)*0.9*Math.min(1,t*4);
+  function ease(x){ return x<0.5 ? 4*x*x*x : 1-Math.pow(-2*x+2,3)/2; }
+  function tween(l,under,dir,from,to,ms,done){
+    var t0=performance.now();
+    (function step(now){
+      var x=Math.min(1,(now-t0)/ms), v=from+(to-from)*(x<1? (1-Math.pow(1-x,3)) : 1);
+      pose(l,v,dir,under);
+      if(x<1) requestAnimationFrame(step); else done&&done();
+    })(t0);
   }
-  function animateTo(l,under,deg,done){
-    l.classList.add('anim'); if(under) under.classList.add('anim');
-    requestAnimationFrame(function(){ paint(l,under,deg); });
-    var fin=false; function end(){ if(fin) return; fin=true; l.removeEventListener('transitionend',onEnd); done&&done(); }
-    function onEnd(e){ if(e.target===l && e.propertyName==='transform') end(); }
-    l.addEventListener('transitionend',onEnd); setTimeout(end,800);
-  }
-  function turn(dir,fromDeg){
+  function turn(dir,fromT){
     if(busy) return false;
     if(dir>0 && cur>=n-1) return false; if(dir<0 && cur<=0) return false;
     busy=true;
     var l = dir>0 ? leaves[cur] : leaves[cur-1], under = dir>0 ? leaves[cur+1] : leaves[cur];
     l.style.visibility='visible'; if(under) under.style.visibility='visible';
-    if(fromDeg!==undefined){ paint(l,under,fromDeg); } else { paint(l,under, dir>0?0:-180); }
-    requestAnimationFrame(function(){ animateTo(l,under, dir>0?-180:0, function(){ cur+=dir; busy=false; layer(); updateCount(); }); });
+    var from = fromT!==undefined ? fromT : (dir>0?0:1), to = dir>0?1:0;
+    var ms = 380+520*Math.abs(to-from);
+    tween(l,under,dir,from,to,ms,function(){ cur+=dir; busy=false; layer(); updateCount(); });
     return true;
   }
-  function snapBack(l,under,dir){ busy=true; animateTo(l,under, dir>0?0:-180, function(){ busy=false; layer(); }); }
+  function snapBack(l,under,dir){ busy=true; tween(l,under,dir,l._t,dir>0?0:1,300+400*Math.abs(l._t-(dir>0?0:1)),function(){ busy=false; layer(); }); }
   layer();
 
   // finger-following drag
-  var sx=0,sy=0,st=0,lastX=0,lastT=0,vx=0,drag=null;
-  function down(x,y){ if(busy) return; sx=lastX=x; sy=y; st=lastT=Date.now(); vx=0; drag={dir:0,decided:false}; }
+  var sx=0,sy=0,st0=0,lastX=0,lastT=0,vx=0,drag=null;
+  function down(x,y){ if(busy) return; sx=lastX=x; sy=y; st0=lastT=Date.now(); vx=0; drag={dir:0,decided:false}; }
   function move(x,y,e){
     if(!drag) return; var dx=x-sx, dy=y-sy, now=Date.now();
     if(!drag.decided){ if(Math.abs(dx)<6 && Math.abs(dy)<6) return; drag.decided=true;
       if(Math.abs(dy)>Math.abs(dx)){ drag=null; return; }
       drag.dir = dx<0 ? 1 : -1;
-      if((drag.dir>0 && cur>=n-1)||(drag.dir<0 && cur<=0)){ drag.dir=0; }
+      if((drag.dir>0 && cur>=n-1)||(drag.dir<0 && cur<=0)) drag.dir=0;
       if(drag.dir){ drag.l = drag.dir>0?leaves[cur]:leaves[cur-1]; drag.u = drag.dir>0?leaves[cur+1]:leaves[cur];
-        drag.l.style.visibility='visible'; if(drag.u) drag.u.style.visibility='visible'; drag.l.classList.remove('anim'); }
+        drag.l.style.visibility='visible'; if(drag.u) drag.u.style.visibility='visible'; }
     }
     if(e && e.cancelable) e.preventDefault();
     vx = (x-lastX)/Math.max(1,now-lastT); lastX=x; lastT=now;
     if(!drag.dir) return;
-    var p = Math.max(0,Math.min(1, Math.abs(dx)/(w*0.9)));
-    var deg = drag.dir>0 ? -180*p : -180*(1-p);
-    if((drag.dir>0 && dx>0)||(drag.dir<0 && dx<0)) deg = drag.dir>0?0:-180;
-    drag.deg=deg; paint(drag.l,drag.u,deg);
+    var p = Math.max(0,Math.min(1, (drag.dir>0?-dx:dx)/(w*0.95)));
+    drag.t = drag.dir>0 ? p : 1-p; pose(drag.l,drag.t,drag.dir,drag.u);
   }
   function up(x,y){
-    if(!drag) return; var d=drag; drag=null; var dx=x-sx, dy=y-sy, dt=Date.now()-st;
+    if(!drag) return; var d=drag; drag=null; var dx=x-sx, dt=Date.now()-st0;
     if(!d.decided){ if(dt<400){ var r=root.getBoundingClientRect(), rel=(x-r.left)/r.width; if(rel>0.55) turn(1); else if(rel<0.45) turn(-1); } return; }
     if(!d.dir) return;
-    var p=Math.abs(dx)/(w*0.9), fling = (d.dir>0 && vx<-0.22) || (d.dir<0 && vx>0.22) || (dt<300 && Math.abs(dx)>35);
-    var right = (d.dir>0 && dx<0)||(d.dir<0 && dx>0);
-    if(right && (p>0.2 || fling)) turn(d.dir, d.deg); else snapBack(d.l,d.u,d.dir);
+    var p=(d.dir>0?-dx:dx)/(w*0.95), fling=(d.dir>0 && vx<-0.22)||(d.dir<0 && vx>0.22)||(dt<300 && Math.abs(dx)>35);
+    if(p>0 && (p>0.2 || fling)) turn(d.dir, d.t); else snapBack(d.l,d.u,d.dir);
   }
   var ts=function(e){ var t=e.changedTouches[0]; down(t.clientX,t.clientY); },
       tm=function(e){ var t=e.changedTouches[0]; move(t.clientX,t.clientY,e); },
