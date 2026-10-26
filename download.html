@@ -73,7 +73,7 @@ footer a{text-decoration:none}
 .btn.primary{background:var(--lime);color:#12301c}
 .btn.ghost{border:1.5px solid rgba(166,209,74,.55);color:var(--cream)}
 .btn[aria-disabled="true"]{opacity:.4;pointer-events:none}
-.notice{margin-top:4px;padding:14px;border-radius:12px;background:rgba(217,164,65,.10);border:1px solid rgba(217,164,65,.3);color:#ecd3a1;font-size:14px;text-align:center}
+.notice{margin-top:16px;padding:14px;border-radius:12px;background:rgba(217,164,65,.10);border:1px solid rgba(217,164,65,.3);color:#ecd3a1;font-size:14px;text-align:center}
 
 /* Viewer */
 .viewer{position:fixed;inset:0;z-index:30;background:#08170e;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -215,15 +215,15 @@ footer a{text-decoration:none}
    Set available:true and fill file/src once the file is uploaded. */
 var RESOURCES = [
   { id:'brochure', kind:'book', label:'Brochure', title:'Arunachal Kiwi Brochure',
-    desc:'Tri-fold brochure: why Arunachal Kiwi stands apart, kiwi geography, orchard-to-market value chain and the 2047 vision. Flip through it like a book.',
+    desc:'Tri-fold brochure: why Arunachal Kiwi stands apart, kiwi geography, orchard-to-market value chain and the 2047 vision.',
     meta:'Tri-fold · 6 panels', pages:['kb-p1.jpg','kb-p2.jpg','kb-p3.jpg','kb-p4.jpg','kb-p5.jpg','kb-p6.jpg'],
     sheets:[['Outside','kb-sheet-outside.jpg'],['Inside','kb-sheet-inside.jpg']],
     file:'Arunachal-Kiwi-Brochure.pdf', downloadName:'Arunachal-Kiwi-Brochure.pdf', available:true },
   { id:'flyer', kind:'image', label:'Flyer', title:'Arunachal Kiwi Flyer',
-    desc:'A one-page snapshot of Arunachal Kiwi — varieties, the highland edge, orchard-to-market value chain and the 2047 vision. Pinch to zoom in.',
+    desc:'A one-page snapshot of Arunachal Kiwi — varieties, the highland edge, orchard-to-market value chain and the 2047 vision.',
     meta:'Image · 1 page', src:'Arunachal-Kiwi-Flyer.jpg', file:'Arunachal-Kiwi-Flyer.jpg', downloadName:'Arunachal-Kiwi-Flyer.jpg', available:true },
   { id:'video', kind:'video', label:'Video', title:'Kiwi Film',
-    desc:'A short film from the kiwi orchards of the highlands.',
+    desc:'',
     meta:'Video', src:'', poster:'', file:'', downloadName:'Kiwi-Film.mp4', available:false }
 ];
 
@@ -262,7 +262,7 @@ function openSheet(r){
   $('sheetKind').textContent=r.label;
   $('sheetTitle').textContent=r.title;
   $('sheetMeta').textContent=r.meta;
-  $('sheetDesc').textContent=r.desc;
+  $('sheetDesc').textContent=r.desc; $('sheetDesc').hidden=!r.desc;
   $('viewLabel').textContent = r.kind==='video' ? 'Watch' : 'View';
   $('sheetActions').hidden=!r.available;
   $('sheetSoon').hidden=r.available;
